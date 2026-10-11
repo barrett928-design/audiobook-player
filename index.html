@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+<title>Audiobook Player</title>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="bookTitle">Audiobook Player</h1>
+    <p id="trackTitle">Pick your MP3 files to begin</p>
+  </header>
+
+  <label class="pick">
+    <input id="filePicker" type="file" accept="audio/mpeg,.mp3" multiple>
+    Choose MP3 files
+  </label>
+
+  <audio id="audio" preload="metadata"></audio>
+
+  <section class="progress">
+    <input id="seek" type="range" min="0" max="1" step="1" value="0" aria-label="Seek">
+    <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+  </section>
+
+  <section class="controls">
+    <button id="prev" aria-label="Previous chapter">⏮</button>
+    <button id="back" aria-label="Back 15 seconds">−15</button>
+    <button id="play" class="primary" aria-label="Play or pause">▶</button>
+    <button id="fwd" aria-label="Forward 30 seconds">+30</button>
+    <button id="next" aria-label="Next chapter">⏭</button>
+  </section>
+
+  <section class="options">
+    <label>Speed
+      <select id="speed">
+        <option>0.75</option><option selected>1</option><option>1.25</option>
+        <option>1.5</option><option>1.75</option><option>2</option>
+      </select>
+    </label>
+    <label>Sleep
+      <select id="sleep">
+        <option value="0">Off</option><option value="15">15 min</option>
+        <option value="30">30 min</option><option value="60">60 min</option>
+      </select>
+    </label>
+  </section>
+
+  <ol id="playlist"></ol>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
