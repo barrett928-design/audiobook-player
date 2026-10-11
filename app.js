@@ -17,6 +17,38 @@ const fmt = (s) => {
   return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
 };
 
+// --- Persistence: the chosen book's MP3s are stored in IndexedDB so they survive restarts.
+const dbp = new Promise((res, rej) => {
+  const r = indexedDB.open("audiobook", 1);
+  r.onupgradeneeded = () => { r.result.createObjectStore("book"); r.result.createObjectStore("files"); };
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+const tx = async (stores, mode, fn) => {
+  const db = await dbp;
+  return new Promise((res, rej) => {
+    const t = db.transaction(stores, mode);
+    const out = fn(t);
+    t.oncomplete = () => res(out ? out.result : undefined);
+    t.onerror = t.onabort = () => rej(t.error);
+  });
+};
+async function saveBook(list) {
+  await tx(["book", "files"], "readwrite", (t) => {
+    t.objectStore("book").clear();
+    t.objectStore("files").clear();
+    t.objectStore("book").put({ bookId, names: list.map((x) => x.name) }, "current");
+    list.forEach((x, i) => t.objectStore("files").put(x.file, i));
+  });
+}
+async function restoreBook() {
+  const meta = await tx(["book"], "readonly", (t) => t.objectStore("book").get("current"));
+  if (!meta) return null;
+  const files = await tx(["files"], "readonly", (t) => t.objectStore("files").getAll());
+  if (files.length !== meta.names.length) return null;
+  return { bookId: meta.bookId, list: meta.names.map((name, i) => ({ name, file: files[i] })) };
+}
+
 const loadState = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 const saveState = () => {
   if (!bookId) return;
@@ -52,14 +84,11 @@ function loadTrack(i, time = 0, autoplay = false) {
   updateMediaSession();
 }
 
-$("filePicker").addEventListener("change", (e) => {
-  tracks = [...e.target.files]
-    .filter((f) => /\.mp3$/i.test(f.name) || f.type === "audio/mpeg")
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-    .map((f) => ({ file: f, name: f.name.replace(/\.mp3$/i, "") }));
-  if (!tracks.length) return;
-  bookId = tracks.length + ":" + tracks.map((t) => t.file.size).reduce((a, b) => a + b, 0);
+function openBook(list, id, fresh) {
+  tracks = list;
+  bookId = id;
   $("bookTitle").textContent = tracks[0].name.split(/[-_–]/)[0].trim() || "Audiobook";
+  $("pickText").textContent = "Replace book (choose new MP3 files)";
   const saved = loadState()[bookId];
   if (saved) {
     setSpeed(saved.speed || 1);
@@ -68,7 +97,28 @@ $("filePicker").addEventListener("change", (e) => {
   } else {
     loadTrack(0, 0, false);
   }
+}
+
+$("filePicker").addEventListener("change", async (e) => {
+  const list = [...e.target.files]
+    .filter((f) => /\.mp3$/i.test(f.name) || f.type === "audio/mpeg")
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map((f) => ({ file: f, name: f.name.replace(/\.mp3$/i, "") }));
+  e.target.value = "";
+  if (!list.length) return;
+  const id = list.length + ":" + list.reduce((a, t) => a + t.file.size, 0);
+  openBook(list, id);
+  $("trackTitle").textContent = "Saving to this device…";
+  try {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    await saveBook(list);
+    $("trackTitle").textContent = tracks[index].name;
+  } catch (err) {
+    $("trackTitle").textContent = "Couldn't save for next time (storage full?). Playing anyway.";
+  }
 });
+
+restoreBook().then((b) => { if (b && !tracks.length) openBook(b.list, b.bookId); }).catch((e) => console.error("restore failed", e));
 
 // Setting audio.src resets playbackRate to defaultPlaybackRate, so set both.
 const setSpeed = (r) => { audio.defaultPlaybackRate = r; audio.playbackRate = r; };

@@ -4,7 +4,8 @@ A tiny offline-capable web app (PWA) for playing MP3 audiobooks that don't come 
 
 ## Features
 - Pick a folder's worth of MP3s; chapters are sorted naturally (1, 2, 10)
-- Resumes where you left off (chapter, position, speed) when you re-pick the same files
+- Saves the picked MP3s in the browser (IndexedDB), so the book reopens automatically next launch; picking new files replaces it
+- Resumes where you left off (chapter, position, speed)
 - Skip −15s / +30s, previous/next chapter, speed 0.75–2×, sleep timer
 - Lock-screen / headphone controls via the Media Session API
 - Files never leave your device; nothing is uploaded
@@ -16,9 +17,7 @@ python3 -m http.server 8000
 Open http://localhost:8000. To use on a phone, host the folder on any static host (GitHub Pages works) and use "Add to Home Screen".
 
 ## Roadmap
-- Remember files across sessions (IndexedDB)
 - Bookmarks and per-chapter progress
-- App icons
 - Optional wrap with Capacitor for a native app
 
 ## Editing
