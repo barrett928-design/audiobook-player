@@ -1,4 +1,4 @@
-const CACHE = "audiobook-shell-v1";
+const CACHE = "audiobook-shell-v2";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))));
 self.addEventListener("activate", (e) =>

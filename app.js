@@ -5,7 +5,9 @@ const KEY = "audiobook-state-v1";
 
 let tracks = [];      // [{file, name}]
 let index = 0;
-let sleepTimer = null;
+let sleepDeadline = 0;     // ms timestamp, 0 = off
+let sleepAtChapterEnd = false;
+let sleepTick = null;
 let bookId = "";
 
 const fmt = (s) => {
@@ -60,7 +62,7 @@ $("filePicker").addEventListener("change", (e) => {
   $("bookTitle").textContent = tracks[0].name.split(/[-_–]/)[0].trim() || "Audiobook";
   const saved = loadState()[bookId];
   if (saved) {
-    audio.playbackRate = saved.speed || 1;
+    setSpeed(saved.speed || 1);
     $("speed").value = String(audio.playbackRate);
     loadTrack(saved.index || 0, saved.time || 0, false);
   } else {
@@ -68,9 +70,16 @@ $("filePicker").addEventListener("change", (e) => {
   }
 });
 
+// Setting audio.src resets playbackRate to defaultPlaybackRate, so set both.
+const setSpeed = (r) => { audio.defaultPlaybackRate = r; audio.playbackRate = r; };
+
 const toggle = () => (audio.paused ? audio.play() : audio.pause());
 const skip = (d) => { audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + d)); };
 const next = () => { if (index < tracks.length - 1) loadTrack(index + 1, 0, true); };
+const onEnded = () => {
+  if (sleepAtChapterEnd) { clearSleep(); return; }
+  next();
+};
 const prev = () => {
   if (audio.currentTime > 5 || index === 0) audio.currentTime = 0;
   else loadTrack(index - 1, 0, true);
@@ -82,21 +91,51 @@ $("fwd").onclick = () => skip(30);
 $("next").onclick = next;
 $("prev").onclick = prev;
 $("seek").oninput = (e) => { audio.currentTime = Number(e.target.value); };
-$("speed").onchange = (e) => { audio.playbackRate = Number(e.target.value); saveState(); };
+$("speed").onchange = (e) => { setSpeed(Number(e.target.value)); saveState(); };
+
+// Sleep timer. Uses a wall-clock deadline checked every second and on timeupdate,
+// because setTimeout is throttled/suspended when a phone screen is locked.
+function clearSleep() {
+  sleepDeadline = 0;
+  sleepAtChapterEnd = false;
+  clearInterval(sleepTick);
+  sleepTick = null;
+  $("sleep").value = "0";
+  $("sleepLeft").textContent = "";
+}
+function sleepNow() {
+  clearSleep();
+  audio.pause();
+}
+function checkSleep() {
+  if (!sleepDeadline) return;
+  const left = sleepDeadline - Date.now();
+  if (left <= 0) return sleepNow();
+  $("sleepLeft").textContent = fmt(left / 1000) + " left";
+}
 $("sleep").onchange = (e) => {
-  clearTimeout(sleepTimer);
-  const min = Number(e.target.value);
-  if (min) sleepTimer = setTimeout(() => { audio.pause(); $("sleep").value = "0"; }, min * 60000);
+  clearSleep();
+  const v = e.target.value;
+  $("sleep").value = v;
+  if (v === "chapter") {
+    sleepAtChapterEnd = true;
+    $("sleepLeft").textContent = "end of chapter";
+  } else if (Number(v)) {
+    sleepDeadline = Date.now() + Number(v) * 60000;
+    sleepTick = setInterval(checkSleep, 1000);
+    checkSleep();
+  }
 };
 
 audio.addEventListener("play", () => ($("play").textContent = "⏸"));
 audio.addEventListener("pause", () => { $("play").textContent = "▶"; saveState(); });
-audio.addEventListener("ended", next);
+audio.addEventListener("ended", onEnded);
 audio.addEventListener("loadedmetadata", () => { $("seek").max = audio.duration; $("dur").textContent = fmt(audio.duration); });
 let lastSave = 0;
 audio.addEventListener("timeupdate", () => {
   $("seek").value = audio.currentTime;
   $("cur").textContent = fmt(audio.currentTime);
+  checkSleep();
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); saveState(); }
 });
 window.addEventListener("pagehide", saveState);

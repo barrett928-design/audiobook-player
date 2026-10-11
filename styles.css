@@ -19,3 +19,4 @@ select { width:100%; margin-top:4px; padding:8px; background:var(--card); color:
 #playlist { list-style:none; padding:0; margin:0; }
 #playlist li { padding:12px; border-radius:8px; background:var(--card); margin-bottom:6px; cursor:pointer; }
 #playlist li.active { outline:2px solid var(--accent); }
+.sleepLeft { color:var(--accent); text-align:right; margin:-8px 0 12px; font-size:.85rem; min-height:1.2em; }
