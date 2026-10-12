@@ -118,7 +118,7 @@ $("filePicker").addEventListener("change", async (e) => {
   }
 });
 
-restoreBook().then((b) => { if (b && !tracks.length) openBook(b.list, b.bookId); }).catch((e) => console.error("restore failed", e));
+const restored = restoreBook().then((b) => { if (b && !tracks.length) openBook(b.list, b.bookId); }).catch((e) => console.error("restore failed", e));
 
 // Setting audio.src resets playbackRate to defaultPlaybackRate, so set both.
 const setSpeed = (r) => { audio.defaultPlaybackRate = r; audio.playbackRate = r; };
@@ -192,14 +192,54 @@ window.addEventListener("pagehide", saveState);
 
 function updateMediaSession() {
   if (!("mediaSession" in navigator) || !tracks[index]) return;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: tracks[index].name, artist: $("bookTitle").textContent });
-  const h = navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);
-  h("play", () => audio.play());
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: tracks[index].name,
+    artist: $("bookTitle").textContent,
+    artwork: [{ src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }],
+  });
+}
+
+// Start playback from the lock screen / AirPods, even if iOS suspended the page or
+// dropped the loaded audio while paused: wait for the saved book, reload the chapter
+// at the remembered position if the element isn't usable, then play.
+async function resumePlayback() {
+  if (!tracks.length) await restored;
+  if (!tracks.length) return;
+  if (!audio.src || audio.error || audio.readyState === 0) {
+    loadTrack(index, audio.currentTime || (loadState()[bookId] || {}).time || 0, true);
+    return;
+  }
+  try { await audio.play(); }
+  catch { loadTrack(index, audio.currentTime, true); }
+}
+
+// Handlers are registered once at startup so they exist before any chapter loads.
+function setupMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  const h = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch {} };
+  h("play", resumePlayback);
   h("pause", () => audio.pause());
+  h("stop", () => audio.pause());
   h("seekbackward", () => skip(-15));
   h("seekforward", () => skip(30));
   h("previoustrack", prev);
   h("nexttrack", next);
+  h("seekto", (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime; });
 }
+setupMediaSession();
+
+let lastPos = 0;
+function updatePositionState() {
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState || !isFinite(audio.duration)) return;
+  try {
+    navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.currentTime, audio.duration) });
+  } catch {}
+}
+audio.addEventListener("play", () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; updatePositionState(); });
+audio.addEventListener("pause", () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"; updatePositionState(); });
+audio.addEventListener("seeked", updatePositionState);
+audio.addEventListener("loadedmetadata", updatePositionState);
+audio.addEventListener("timeupdate", () => { if (Date.now() - lastPos > 10000) { lastPos = Date.now(); updatePositionState(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveState(); });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -1,4 +1,4 @@
-const CACHE = "audiobook-shell-v3";
+const CACHE = "audiobook-shell-v4";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))));
 self.addEventListener("activate", (e) =>
